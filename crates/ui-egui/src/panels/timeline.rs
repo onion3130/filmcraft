@@ -241,6 +241,9 @@ pub enum Drag {
         start_tick: Tick,
         start_y: f32,
         start_v: f32,
+        /// Whether the anchor started in the audio pane (uses `a_scroll`) rather than
+        /// the video pane (`v_scroll`).
+        audio: bool,
         before: Vec<ClipId>,
         add: bool,
         individual: bool,

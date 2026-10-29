@@ -4695,14 +4695,16 @@ pub fn preview_transition(s: &Session, p: &Value, kind: TrackKind) -> Result<(Tr
     } else {
         dur
     };
+    // Snap the centered two-sided start to the frame grid; one-sided starts stay exact
+    // so their edge remains aligned with the cut.
     let start = if from.is_some() && to.is_some() {
-        cut - dur.mul_ratio(1, 2)
+        rate.snap(cut - dur.mul_ratio(1, 2))
     } else if to.is_some() {
         cut
     } else {
         cut - dur
     };
-    let tr = Transition { id: TransitionId(0), effect: instance, start: rate.snap(start), duration: dur, from, to, align: Default::default(), reverse };
+    let tr = Transition { id: TransitionId(0), effect: instance, start, duration: dur, from, to, align: Default::default(), reverse };
     Ok((track, tr))
 }
 

@@ -554,7 +554,9 @@ pub fn invoke(app: &mut FilmcraftApp, ctx: &egui::Context, id: &str, mut params:
         // clips (#2582: Ctrl+C copied the clip instead). Paste falls through to the engine,
         // which prefers the keyframe clipboard when the clip one is empty.
         "edit.copy" | "edit.cut"
-            if params.as_object().is_none_or(|m| m.is_empty()) && !app.ui.keyframe_selection.is_empty() =>
+            if params.as_object().is_none_or(|m| m.is_empty())
+                && matches!(app.ui.focused, PanelKind::EffectControls)
+                && !app.ui.keyframe_selection.is_empty() =>
         {
             let keys: Vec<Value> = app.ui.keyframe_selection.iter().map(|k| k.copy_key_json()).collect();
             let cmd = if id == "edit.cut" { "keyframes.cut" } else { "keyframes.copy" };

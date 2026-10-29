@@ -506,8 +506,9 @@ fn effect_controls_font_field_picks_and_types_families() {
     d.frames(3);
     assert_eq!(text_param(&mut d, clip, "font"), Some(filmcraft_project::ParamValue::Text(target.clone())), "the typed family applies");
 
-    // the field also opens a list: picking another family there applies it too
-    let other = families.iter().find(|f| *f != &target && !f.eq_ignore_ascii_case(&current)).unwrap().clone();
+    // the field also opens a list: picking another family there applies it too (any family
+    // but the typed one, so the test also passes with exactly two families installed)
+    let other = families.iter().find(|f| *f != &target).unwrap().clone();
     d.ok("ui.click", json!({"id": format!("{font_id}.menu")}));
     d.frames(2);
     d.shot("effect-controls-font-dropdown");

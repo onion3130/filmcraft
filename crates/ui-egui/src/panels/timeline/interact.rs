@@ -112,9 +112,11 @@ pub(super) fn move_transition_preview(app: &FilmcraftApp, seq: &Sequence, trn: &
 
 /// The screen position of a marquee anchor: its tick under the current layout (so horizontal
 /// scrolling and zoom keep it on the same content), its press height shifted by later vertical
-/// scrolling (rows move down with `v_scroll`, see `video_row_tops`).
-fn marquee_anchor(layout: &Layout, v_scroll: f32, start_tick: Tick, start_y: f32, start_v: f32) -> Pos2 {
-    pos2(layout.x_of(start_tick), start_y + (v_scroll - start_v))
+/// scrolling in the pane it started in (video rows move with `v_scroll`, audio rows with
+/// `a_scroll`, so crossing panes mid-drag cannot shift the anchor with the wrong scroller).
+fn marquee_anchor(layout: &Layout, v_scroll: f32, a_scroll: f32, audio: bool, start_tick: Tick, start_y: f32, start_v: f32) -> Pos2 {
+    let scroll = if audio { a_scroll } else { v_scroll };
+    pos2(layout.x_of(start_tick), start_y + (scroll - start_v))
 }
 
 /// The clips a marquee rectangle touches, on the tracks it crosses.
@@ -494,10 +496,15 @@ fn start_drag(app: &mut FilmcraftApp, ctx: &egui::Context, resp: &egui::Response
         // the video and audio tracks, #683)
         (_, Grab::Other(hit @ (Hit::Empty { .. } | Hit::None))) if layout.content.contains(p) => {
             if resp.drag_started() {
+                // The anchor stays on the press-time tick `t` (not a re-derived tick),
+                // and remembers its pane so later scrolling in the other pane cannot
+                // move it (#3563).
+                let audio = p.y >= layout.split_y;
                 Some(Drag::Marquee {
-                    start_tick: layout.tick_at(p.x),
+                    start_tick: t,
                     start_y: p.y,
-                    start_v: app.ui.timeline.v_scroll,
+                    start_v: if audio { app.ui.timeline.a_scroll } else { app.ui.timeline.v_scroll },
+                    audio,
                     before: app.session.state.selection.clone(),
                     add: mods.shift || mods.command,
                     individual: mods.alt,
@@ -684,8 +691,8 @@ fn drag_update(app: &mut FilmcraftApp, ui: &mut egui::Ui, resp: &egui::Response,
                 Some(Drag::WorkArea { edge, from, start, end })
             }
             Drag::Volume(v) => Some(Drag::Volume(crate::panels::timeline_volume::drag(app, ui, seq, layout, v, p.y))),
-            Drag::Marquee { start_tick, start_y, start_v, before, add, individual } => {
-                let start = marquee_anchor(layout, app.ui.timeline.v_scroll, start_tick, start_y, start_v);
+            Drag::Marquee { start_tick, start_y, start_v, audio, before, add, individual } => {
+                let start = marquee_anchor(layout, app.ui.timeline.v_scroll, app.ui.timeline.a_scroll, audio, start_tick, start_y, start_v);
                 let r = Rect::from_two_pos(start, p);
                 ui.painter().rect_filled(r, 0.0, Color32::from_white_alpha(18));
                 ui.painter().rect_stroke(r, 0.0, Stroke::new(1.0, Color32::from_white_alpha(140)), StrokeKind::Inside);
@@ -700,7 +707,7 @@ fn drag_update(app: &mut FilmcraftApp, ui: &mut egui::Ui, resp: &egui::Response,
                     }
                 }
                 app.session.state.selection = sel;
-                Some(Drag::Marquee { start_tick, start_y, start_v, before, add, individual })
+                Some(Drag::Marquee { start_tick, start_y, start_v, audio, before, add, individual })
             }
             other => Some(other),
         };
@@ -767,9 +774,9 @@ fn commit_drag(app: &mut FilmcraftApp, ctx: &egui::Context, resp: &egui::Respons
                     let moved = seq.work_area.is_some_and(|w| (w.start, w.end()) != (start, end));
                     moved.then(|| app.session.execute("sequence.setWorkArea", json!({"start": start.0, "end": end.0})))
                 }
-                Drag::Marquee { start_tick, start_y, start_v, before, add, individual } => {
+                Drag::Marquee { start_tick, start_y, start_v, audio, before, add, individual } => {
                     app.session.state.selection = before;
-                    let start = marquee_anchor(layout, app.ui.timeline.v_scroll, start_tick, start_y, start_v);
+                    let start = marquee_anchor(layout, app.ui.timeline.v_scroll, app.ui.timeline.a_scroll, audio, start_tick, start_y, start_v);
                     // egui ends a drag on Escape: that cancels the box, as in the Project panel
                     match resp.interact_pointer_pos() {
                         Some(end) if !ctx.input(|i| i.key_pressed(egui::Key::Escape)) => {
