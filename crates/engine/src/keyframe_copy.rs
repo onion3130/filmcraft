@@ -73,7 +73,8 @@ fn resolve(s: &Session, keys: &[KeyRef], cmd: &str) -> Result<Vec<KeyframeCopy>>
         let (_, it) = q.find_item(k.clip).ok_or_else(|| bad(cmd, format!("no clip {}", k.clip.0)))?;
         let e = match &k.effect {
             Value::Number(n) => {
-                it.effects.get(n.as_u64().unwrap_or(0) as usize).ok_or_else(|| bad(cmd, "no such effect on clip"))?
+                let idx = n.as_u64().ok_or_else(|| bad(cmd, "`effect`: an index or a name"))?;
+                it.effects.get(idx as usize).ok_or_else(|| bad(cmd, "no such effect on clip"))?
             }
             Value::String(sid) => {
                 it.effects.iter().find(|e| &e.effect == sid).ok_or_else(|| bad(cmd, "no such effect on clip"))?
@@ -91,7 +92,7 @@ fn resolve(s: &Session, keys: &[KeyRef], cmd: &str) -> Result<Vec<KeyframeCopy>>
             .find(|kf| kf.time == k.time)
             .ok_or_else(|| bad(cmd, format!("no keyframe of `{}` at {}", k.param, k.time.0)))?;
         let effect = match &k.effect {
-            Value::Number(n) => n.as_u64().unwrap_or(0) as usize,
+            Value::Number(n) => n.as_u64().ok_or_else(|| bad(cmd, "`effect`: an index or a name"))? as usize,
             Value::String(sid) => {
                 it.effects.iter().position(|e| &e.effect == sid).ok_or_else(|| bad(cmd, "no such effect on clip"))?
             }
@@ -102,7 +103,7 @@ fn resolve(s: &Session, keys: &[KeyRef], cmd: &str) -> Result<Vec<KeyframeCopy>>
             effect,
             param: k.param.clone(),
             mask: k.mask,
-            dt: Tick(k.time.0 - min.0),
+            dt: Tick(k.time.0.saturating_sub(min.0)),
             value: kf.value.clone(),
             interp: kf.interp,
             in_influence: kf.in_influence,

@@ -207,6 +207,16 @@ pub fn check_candidate(s: &Session, item: ItemId, path: &str, o: &MatchOptions) 
         MediaRef::Generator(_) => return Err(bad("media.relink", "generated media has no file to link")),
     };
     let mut c = Candidate { path: path.to_string(), ..Default::default() };
+    // Every relink path (direct, relinkOthers, autoRelink) funnels through here:
+    // refuse a file an in-progress export is still writing (#3551).
+    if let Some(hit) = crate::export_tools::reserved_hit(s, path) {
+        c.problems.push(format!(
+            "{path}: an export (job {}) is still writing to this file; relink after it finishes",
+            hit.job
+        ));
+        c.ok = false;
+        return Ok(c);
+    }
     let (on, oe) = split_ext(file_name(&old));
     let (nn, ne) = split_ext(file_name(path));
     let name_ok = on.eq_ignore_ascii_case(nn);

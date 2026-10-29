@@ -603,12 +603,22 @@ fn extra_file_hit(format: Format, dest: &str, candidate: &str) -> bool {
     if c_digits.is_empty() || !c_ext.eq_ignore_ascii_case(&extension_of(dest)) {
         return false;
     }
+    // Platform filename rules: Windows compares stems case-insensitively.
+    let same = |a: &str, b: &str| if cfg!(windows) { a.to_lowercase() == b.to_lowercase() } else { a == b };
     if format.is_image_sequence() {
-        // `clip.png` writes `clip000.png`, `clip001.png`, …
-        c_stem == file_stem_of(dest)
+        // `{stem}{frame}.{ext}`, where stem is the *complete* destination stem
+        // even when it ends in digits: `Sequence 01.png` writes
+        // `Sequence 01000.png`, which split_frame_name would reduce to
+        // (`Sequence `, `01000`). So match the base (stem + digits) by prefix:
+        // it must be longer than the dest stem and the rest all digits.
+        let dest_stem = file_stem_of(dest);
+        let base = format!("{c_stem}{c_digits}");
+        base.len() > dest_stem.len()
+            && same(&base[..dest_stem.len()], &dest_stem)
+            && base[dest_stem.len()..].chars().all(|c| c.is_ascii_digit())
     } else {
         // `atom.mxf` writes `atom_A1.mxf`, `atom_A2.mxf`, …
-        c_stem == format!("{}_A", file_stem_of(dest))
+        same(&c_stem, &format!("{}_A", file_stem_of(dest)))
     }
 }
 
@@ -636,6 +646,13 @@ pub fn prune_export_reservations(s: &mut Session) {
 /// its folder is caught too.
 pub fn active_export_hit(s: &mut Session, path: &str) -> Option<ReservedDestination> {
     prune_export_reservations(s);
+    reserved_hit(s, path)
+}
+
+/// Read-only reservation check (no pruning): for `check_candidate`, which runs on `&Session`
+/// from search and relink-candidate paths. A just-finished job's reservation lingers until the
+/// next mutating call prunes it — safe direction (refuse, then succeed after prune).
+pub fn reserved_hit(s: &Session, path: &str) -> Option<ReservedDestination> {
     let canon = canonical_dest_path(path);
     s.export_reservations.iter().find(|r| canonical_dest_path(&r.path) == canon || extra_file_hit(r.format, &r.path, path)).cloned()
 }
