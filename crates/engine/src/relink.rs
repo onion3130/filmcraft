@@ -406,6 +406,10 @@ fn others(s: &Session, skip: ItemId, old: &str, new: &str, o: &MatchOptions) -> 
 pub fn relink(s: &mut Session, p: &Value) -> Result<Value> {
     let item = u64_p(p, "item").map(ItemId).ok_or_else(|| bad("media.relink", "need `item`"))?;
     let path = str_p(p, "path").ok_or_else(|| bad("media.relink", "need `path`"))?.to_string();
+    // An export is still writing there (forced or not, the file is not the original yet).
+    if let Some(hit) = crate::export_tools::active_export_hit(s, &path) {
+        return Err(bad("media.relink", format!("{path}: an export (job {}) is still writing to this file; relink after it finishes", hit.job)));
+    }
     let force = bool_p(p, "force").unwrap_or(false);
     let o = MatchOptions::from_params(p);
     let old = match s.project.item(item).and_then(|i| i.as_media()).map(|m| m.media.clone()) {

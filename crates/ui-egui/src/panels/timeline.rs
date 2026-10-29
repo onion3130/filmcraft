@@ -233,9 +233,14 @@ pub enum Drag {
         start_v: f32,
     },
     /// Box selection, shown live: `before` is the selection when the drag began, which Shift or
-    /// Ctrl (`add`) keep; the release commits one `timeline.select`.
+    /// Ctrl (`add`) keep; the release commits one `timeline.select`. The anchor is in content
+    /// coordinates (the tick under the press, the press height adjusted by later vertical
+    /// scrolling), so auto-scroll while dragging extends the box instead of moving it with the
+    /// viewport (#3563).
     Marquee {
-        start: Pos2,
+        start_tick: Tick,
+        start_y: f32,
+        start_v: f32,
         before: Vec<ClipId>,
         add: bool,
         individual: bool,
